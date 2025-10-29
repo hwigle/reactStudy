@@ -1,0 +1,37 @@
+# --- [!!가장 중요!!] Docker 로컬 데이터 ---
+# H2 데이터베이스 파일이 저장된 폴더 (절대 커밋하면 안 됨)
+db-data/
+
+# --- 공통 ---
+.DS_Store
+Thumbs.db
+
+# --- IDE (Eclipse, STS, VSCode) ---
+.idea/
+*.iml
+.settings/
+.classpath
+.project
+.metadata/
+
+# --- Java / Gradle (my-api) ---
+# (build 폴더와 bin 폴더는 my-api 경로 하위의 것만 무시)
+my-api/bin/
+my-api/build/
+my-api/.gradle/
+# (루트의 .gradle도 무시)
+.gradle/
+
+# --- React / Node (my-app) ---
+my-app/node_modules/
+my-app/build/
+my-app/.env
+my-app/.env.local
+my-app/.env.development
+my-app/.env.production
+
+# npm 로그
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+

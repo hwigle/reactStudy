@@ -15,12 +15,16 @@ Thumbs.db
 .metadata/
 
 # --- Java / Gradle (my-api) ---
-# (build 폴더와 bin 폴더는 my-api 경로 하위의 것만 무시)
 my-api/bin/
 my-api/build/
 my-api/.gradle/
 # (루트의 .gradle도 무시)
 .gradle/
+
+# --- Java / Gradle (my-rabbitmq-backend) --- [▼▼▼ 추가! ▼▼▼]
+my-rabbitmq/my-rabbitmq-backend/bin/
+my-rabbitmq/my-rabbitmq-backend/build/
+my-rabbitmq/my-rabbitmq-backend/.gradle/
 
 # --- React / Node (my-app) ---
 my-app/node_modules/
@@ -34,4 +38,3 @@ my-app/.env.production
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+    <title>Spring Boot + RabbitMQ Chat</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+        #chat-window { border: 1px solid #ccc; height: 300px; overflow-y: scroll; padding: 5px; margin-bottom: 10px; }
+        .message { margin-bottom: 5px; }
+        .sender { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>General 채팅방</h1>
+	<div>
+        <label for="room-id">방 ID:</label>
+        <input type="text" id="room-id" placeholder="채팅방 ID를 입력하세요">
+    </div>
+    <div>
+        <label for="username">이름:</label>
+        <input type="text" id="username" placeholder="이름을 입력하세요">
+        <button id="connect-button">연결</button>
+    </div>
+    <hr>
+    <div id="chat-window"></div>
+    <input id="message-input" type="text" style="width: 80%;" />
+    <button id="send-button">전송</button>
+
+    <script>
+        const chatWindow = document.getElementById('chat-window');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const connectButton = document.getElementById('connect-button');
+        const usernameInput = document.getElementById('username');
+		const roomIdInput = document.getElementById('room-id');
+
+        let stompClient = null;
+        let username = null;
+		let roomId = null;
+
+        connectButton.onclick = connect;
+        sendButton.onclick = sendMessage;
+
+        function connect() {
+            username = usernameInput.value.trim();
+			roomId = roomIdInput.value.trim();
+			
+            if (!username || !roomId) {
+                alert('이름과 방 ID를 모두 입력하세요.');
+                return;
+            }
+
+            // 2. Spring Boot WebSocket 엔드포인트(/ws)로 SockJS 연결
+            const socket = new SockJS('http://localhost:8080/ws');
+            stompClient = Stomp.over(socket);
+
+            // 3. STOMP 연결 시작
+            stompClient.connect({}, onConnected, onError);
+        }
+
+        function onConnected() {
+			console.log('연결 성공! 방 ID: ' + roomId);
+            addMessageToWindow(`서버에 연결되었습니다. (방: ${roomId})`);
+			
+			// 4. (구독) 동적인 토픽 주소
+            stompClient.subscribe('/topic/room/' + roomId, onMessageReceived);
+
+			// 5. (발행) 동적인 주소
+			stompClient.send("/app/chat.addUser/" + roomId, 
+                {},
+                JSON.stringify({ sender: username, type: 'JOIN', roomId: roomId })
+            );
+        }
+
+        function onError(error) {
+            console.error('STOMP 연결 실패:', error);
+            addMessageToWindow('서버 연결에 실패했습니다. 콘솔을 확인하세요.');
+        }
+
+        // 6. (수신) 메시지를 받으면 화면에 표시
+        function onMessageReceived(payload) {
+            const message = JSON.parse(payload.body);
+            let messageText = '';
+
+            if (message.type === 'JOIN') {
+                messageText = message.sender + '님이 입장했습니다.';
+            } else if (message.type === 'LEAVE') {
+                messageText = message.sender + '님이 퇴장했습니다.';
+            } else {
+                messageText = `<span class="sender">${message.sender}:</span> ${message.content}`;
+            }
+            addMessageToWindow(messageText, (message.type !== 'JOIN' && message.type !== 'LEAVE'));
+        }
+
+        // 7. (송신) '전송' 버튼 클릭 시 메시지 발행
+        function sendMessage() {
+            const messageContent = messageInput.value.trim();
+            if (messageContent && stompClient) {
+                const chatMessage = {
+                    sender: username,
+                    content: messageInput.value,
+                    type: 'CHAT',
+               		roomId: roomId 
+                };
+
+                // 8. (발행) 
+				stompClient.send("/app/chat.sendMessage/" + roomId, {}, JSON.stringify(chatMessage)); 
+            	messageInput.value = '';
+            }
+        }
+
+        function addMessageToWindow(message, isHtml = false) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            if (isHtml) {
+                messageElement.innerHTML = message;
+            } else {
+                messageElement.textContent = message;
+            }
+            chatWindow.appendChild(messageElement);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+    </script>
+</body>
+</html>

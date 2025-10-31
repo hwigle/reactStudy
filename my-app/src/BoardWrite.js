@@ -1,81 +1,123 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom'; // 1. 페이지 이동을 위한 훅
+import { useNavigate } from 'react-router-dom';
+
+// --- 👇 [MUI 컴포넌트 import] ---
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import TextField from '@mui/material/TextField'; // Input/Textarea 대체
+import Button from '@mui/material/Button';
+import Paper from '@mui/material/Paper'; // 폼을 감쌀 종이(카드)
+// --- [MUI import 끝] ---
 
 function BoardWrite() {
-    // 2. React Router의 페이지 이동 훅
     const navigate = useNavigate();
 
-    // 3. 폼 데이터를 관리핧 state(title, content)
     const [form, setForm] = useState({
         title: '',
-        content:''
+        content: ''
     });
 
     // 4. input/textarea 값이 바뀔 때마다 state를 업데이트하는 함수
     const handleChange = (e) => {
-        // e.target.name(input의 name)과 e.target.value(입력값)를 가져옴
-        const {name, value} = e.target;
+        const { name, value } = e.target;
         setForm({
-            ...form, // 기존 form 객체 복사
-            [name] : value // [name] (title 또는 content) 필드를 새 value로 덮어쓰기
+            ...form,
+            [name]: value
         });
     }
 
-    // 5. 제출 버튼 클릭 시 실행될 함수
+    // 5. 제출 버튼 클릭 시 실행될 함수 (로직 100% 동일)
     const handleSubmit = async (e) => {
-        // 6. 폼의 기본 동작(새로고침) 방지 (필수)
         e.preventDefault();
-
-        // 간단한 유효성 검사
-        if(!form.title || !form.content) {
+        if (!form.title || !form.content) {
             alert("제목과 내용을 모두 입력해주세요.");
             return;
         }
-
         try {
-            // 7. axios.post로 Spring Boot API에 form 데이터를 전송
-            //    (form 객체를 JSON으로 자동 변환해서 보냄)
             const response = await axios.post('http://localhost:8080/api/board', form);
-
-            // 8. 글쓰기 성공 시, 서버가 반환한 새 글의 id를 이용해 상세 페이지로 이동
             alert("게시글이 성공적으로 등록되었습니다.");
-            navigate(`/detail/${response.data.id}`); // (예 : /detail/4)
-        } catch(error) {
-            console.error("게시글 등록 실패 : " , error);
+            navigate(`/detail/${response.data.id}`);
+        } catch (error) {
+            console.error("게시글 등록 실패 : ", error);
             alert("게시글 등록에 실패했습니다.");
         }
     };
 
-    return(
-        <div>
-            <h2>📋 새 게시글 작성</h2>
-            {/* 9. 폼 제출 시 handleSubmit 함수 실행 */}
-            <form onSubmit={handleSubmit}>
-                <div>
-                    <label>제목 : </label>
-                    {/* 10. state와 input을 연결(Controlled Component) */}
-                    <input 
-                        type="text"
-                        name="title"            // (handleChange에서 e.target.name으로 사용됨)
-                        value={form.title}      // (state의 값을 표시)
-                        onChange={handleChange} // (값이 바뀔 때마다 handleChange 실행)
-                        placeholder="제목을 입력하세요"
-                    />
-                </div>
-                <div>
-                    <label>내용: </label>
-                    <textarea
-                        name="content" // (handleChange에서 e.target.name으로 사용됨)
-                        value={form.content} // (state의 값을 표시)
-                        onChange={handleChange} // (값이 바뀔 때마다 handleChange 실행)
-                        placeholder="내용을 입력하세요"
-                    />
-                </div>
-                <button type="submit">제출</button>
-            </form>
-        </div>
+    // --- 👇 [취소 버튼 핸들러 추가] ---
+    const handleCancel = () => {
+        // 'navigate(-1)'은 브라우저의 '뒤로 가기'와 동일하게 동작합니다.
+        navigate(-1);
+    };
+    // --- [핸들러 추가 끝] ---
+
+    return (
+        <Paper sx={{ p: 4, maxWidth: '700px', margin: 'auto' }}>
+            <Typography variant="h4" component="h2" gutterBottom>
+                📋 새 게시글 작성
+            </Typography>
+
+            <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
+                <TextField
+                    label="제목"
+                    variant="outlined"
+                    fullWidth
+                    margin="normal"
+                    type="text"
+                    name="title"
+                    value={form.title}
+                    onChange={handleChange}
+                    required
+                />
+
+                <TextField
+                    label="내용"
+                    variant="outlined"
+                    fullWidth
+                    margin="normal"
+                    name="content"
+                    value={form.content}
+                    onChange={handleChange}
+                    multiline
+                    rows={10}
+                    required
+                />
+
+                {/* --- 👇 [버튼 영역 수정] --- */}
+                {/* 1. 버튼들을 감싸는 Box를 만들고, flex를 이용해 오른쪽 정렬 */}
+
+                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                    {/* 취소 버튼 */}
+                    <Button
+                        variant="outlined" // 테두리만 있는 버튼
+                        color="secondary"  // 회색 계열 색상
+                        onClick={handleCancel}
+                        sx={{ mr: 1 }}  // 오른쪽 여백을 설정하여 버튼 간격 조정
+                    >
+                        취소
+                    </Button>
+
+                    {/* 등록 버튼 */}
+                    <Button
+                        type="submit"
+                        variant="contained"
+                        color="primary"
+                        size="large"
+                        sx={{ ml: 0 }} // 왼쪽 여백을 0으로 설정하여 버튼 붙이기
+                    >
+                        등록
+                    </Button>
+                </Box>
+                {/* --- [버튼 영역 수정 끝] --- */}
+            </Box>
+        </Paper>
     );
 }
 
 export default BoardWrite;
+
+
+
+
+
+

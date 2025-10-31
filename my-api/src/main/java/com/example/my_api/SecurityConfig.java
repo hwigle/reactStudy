@@ -4,6 +4,7 @@ import java.util.Arrays;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -57,15 +58,20 @@ public class SecurityConfig {
             // (서버가 세션이나 쿠키 대신 JWT 토큰을 사용하도록 함)
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			// 7. HTTP 요청 경로별 접근 권한 설정
-			.authorizeHttpRequests(authz -> authz
-					// --- [H2 콘솔 경로 허용] ---
-	                // /h2-console/** 경로의 모든 요청은 누구나 접근(permit) 가능
-	                .requestMatchers("/h2-console/**").permitAll()
-					// [중요] /api/auith/** 경로는 누구나(permit) 접근 가능
-					.requestMatchers("/api/auth/**").permitAll()
-					// [중요] 그 외 모든 경로는 인증(authentication)이 필요
-					.anyRequest().authenticated()
-			)
+            .authorizeHttpRequests(authz -> authz
+                    // /api/auth/** (로그인/회원가입), /h2-console/** 는 누구나 허용
+                    .requestMatchers("/h2-console/**", "/api/auth/**").permitAll() 
+                    
+                    // "읽기" 전용 (GET) 요청은 누구나 허용
+                    // - GET /api/board (게시글 목록)
+                    // - GET /api/board/{id} (게시글 상세)
+                    // - GET /api/board/{boardId}/comments (댓글 목록)
+                    .requestMatchers(HttpMethod.GET, "/api/board", "/api/board/**").permitAll() 
+                    
+                    // 그 외 "모든" 요청은 인증(로그인)이 필요
+                    // (즉, POST, PUT, DELETE 등 "쓰기" 요청은 모두 인증 필요)
+                    .anyRequest().authenticated() 
+                )
 			// --- 👇 [필터 등록 (핵심)] ---
             // 3. 우리가 만든 'JwtTokenFilter'를 
             //    Spring Security의 'UsernamePasswordAuthenticationFilter' (로그인 처리 필터)

@@ -1,127 +1,322 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom'; 
-import axios from 'axios'; 
-import { jwtDecode } from 'jwt-decode';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, Link as RouterLink, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
-function BoardDetail() {
-  const { boardId } = useParams(); 
-  const [post, setPost] = useState(null); 
-  const [ loading, setLoading ] = useState(true);
-  const [ isAuthor, setIsAuthor ] = useState(false);
-  const navigate = useNavigate();
+// --- MUI 컴포넌트 import ---
+import Paper from '@mui/material/Paper';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Typography from '@mui/material/Typography';
+import Divider from '@mui/material/Divider';
+import CircularProgress from '@mui/material/CircularProgress';
+import Alert from '@mui/material/Alert';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemText from '@mui/material/ListItemText';
+import TextField from '@mui/material/TextField';
+import IconButton from '@mui/material/IconButton';
+import DeleteIcon from '@mui/icons-material/Delete';
+// --- MUI import 끝 ---
 
-  useEffect(() => {
-    // 현재 로그인한 사용자 이름 확인용 함수
-    const getCurrentUsername = () => {
-      const token = localStorage.getItem('jwtToken');
-      if(token) {
-        try {
-          const decodedToken = jwtDecode(token); // 토큰 해독
-          return decodedToken.sub; // 해독된 정보에서 'sub'(사용자 이름) 반환
-        } catch(error) {
-          console.error("토큰 디코드실패 : ", error);
-          return null;
-        }
-      }
+// (헬퍼 함수) 현재 로그인한 사용자 이름 가져오기
+const getCurrentUsername = async () => {
+  const token = localStorage.getItem('jwtToken');
+  if (token) {
+    try {
+      // 'jwt-decode' 동적 import
+      const { jwtDecode } = await import('jwt-decode'); 
+      const decodedToken = jwtDecode(token);
+      return decodedToken.sub;
+    } catch (error) {
+      console.error("토큰 디코드 실패:", error);
       return null;
     }
+  }
+  return null;
+};
 
-    // 게시글 데이터 가져오는 함수
-    const fetchPost = async () => {
+// (헬퍼 함수) Axios 헤더 설정
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('jwtToken');
+  if (token) {
+    return { headers: { 'Authorization': `Bearer ${token}` } };
+  }
+  return {};
+};
+
+// --- 👇 [시간 포맷팅 수정] ---
+// (헬퍼 함수) 시간 포맷팅 (년. 월. 일. 오전/오후 시:분)
+const formatTimestamp = (timestamp) => {
+    if (!timestamp) return "";
+    const date = new Date(timestamp); 
+    
+    // 'ko-KR' 로케일을 사용하고, '초'를 제외한 옵션을 지정
+    const options = {
+        year: 'numeric',
+        month: '2-digit', // "10"
+        day: '2-digit',   // "31"
+        hour: '2-digit',  // "04"
+        minute: '2-digit',// "32"
+        hour12: true // '오전/오후' 사용 (false로 하면 24시간제)
+    };
+    
+    // e.g., "2025. 10. 31. 오후 4:32"
+    return date.toLocaleString('ko-KR', options); 
+};
+// --- [수정 끝] ---
+
+
+function BoardDetail() {
+  const { boardId } = useParams();
+  
+  // ❗️ NOTE: useNavigate() 훅은 React Router의 <BrowserRouter>
+  // 컨텍스트 내에서만 사용할 수 있습니다.
+  const navigate = useNavigate();
+
+  // (모든 state 선언)
+  const [post, setPost] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isAuthor, setIsAuthor] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState("");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUsername, setCurrentUsername] = useState(null);
+
+  // --- 댓글 목록 불러오는 함수 (useCallback으로 최적화) ---
+  const fetchComments = useCallback(async () => {
+    try {
+      // (로그인 안 해도 댓글은 보이도록 GET 요청은 헤더 없이 보냄)
+      const response = await axios.get(
+        `http://localhost:8080/api/board/${boardId}/comments`
+      );
+      setComments(response.data);
+    } catch (error) {
+      console.error("댓글 로딩 실패:", error);
+      setComments([]); 
+    }
+  }, [boardId]); 
+
+  // --- 게시글 & 사용자 정보 불러오는 useEffect ---
+  useEffect(() => {
+    const fetchPostAndUser = async () => {
       setLoading(true);
       setIsAuthor(false);
+
+      const username = await getCurrentUsername();
+      setCurrentUsername(username);
+      setIsLoggedIn(!!username);
+
       try {
-        const response = await axios.get(`http://localhost:8080/api/board/${boardId}`);
-        const fetchPost = response.data; // 백엔드에서 온 DTO
-        console.log("백엔드 응답 데이터:",fetchPost);
-        setPost(fetchPost); 
+        // (게시글 읽기도 인증이 필요 없음 - permitAll)
+        const postResponse = await axios.get(
+          `http://localhost:8080/api/board/${boardId}`
+        );
+        const fetchedPost = postResponse.data;
+        setPost(fetchedPost);
 
-        // --- [작성자 비교 시작] ---
-        const currentUsername = getCurrentUsername(); 
-
-        console.log("현재 로그인 사용자 (토큰):", currentUsername);
-        console.log("게시글 작성자 (DTO):", fetchPost ? fetchPost.authorUsername : '게시글 정보 없음');
-        
-        if (currentUsername && fetchPost && fetchPost.authorUsername === currentUsername) {
-           setIsAuthor(true);
-        } else {
-           // setIsAuthor(false); // (이미 초기값이 false임)
+        // 작성자 비교 (현재 로그인 사용자 vs 글 작성자)
+        if (username && fetchedPost && fetchedPost.authorUsername === username) {
+          setIsAuthor(true);
         }
-        // --- [작성자 비교 끝] ---
+
+        // 댓글 정보 가져오기
+        await fetchComments(); 
 
       } catch (e) {
         console.error("상세 데이터 로딩 실패: ", e);
-        setPost(null); 
+        setPost(null);
       }
       setLoading(false);
     };
 
-    fetchPost(); // 8. 함수 실행
+    fetchPostAndUser();
+  }, [boardId, fetchComments]); 
 
-  // boardId가 변경될 때마다 이 훅을 다시 실행합니다.
-  }, [boardId]); 
-
-// --- [삭제(Delete) 로직 추가] ---
-const handleDelete = async () => {
-  if (window.confirm("정말로 이 게시글을 삭제하시겠습니까?")) {
-    try {
-      await axios.delete(`http://localhost:8080/api/board/${boardId}`);
-      
-      alert("게시글이 성공적으로 삭제되었습니다.");
-      
-      navigate("/list"); 
-    } catch (error) {
-      console.error("삭제 실패:", error);
-      // --- [에러 종류 확인 로직 추가] ---
-      if (error.response && error.response.status === 403) {
-        alert("이 게시글을 삭제할 권한이 없습니다.");
-      } else {
-        alert("게시글 삭제에 실패했습니다.");
+  
+  // (게시글 삭제 핸들러)
+  const handleDeletePost = async () => {
+    if (window.confirm("정말로 이 게시글을 삭제하시겠습니까?")) {
+      try {
+        await axios.delete(
+          `http://localhost:8080/api/board/${boardId}`,
+          getAuthHeaders() // (삭제는 인증 필요)
+        );
+        alert("게시글이 성공적으로 삭제되었습니다.");
+        navigate("/list");
+      } catch (error) {
+        // ... (에러 처리) ...
       }
-      // --- [에러 종류 확인 로직 로직 끝] ---
     }
+  };
+
+  // (댓글 작성 핸들러)
+  const handleCommentSubmit = async (e) => {
+    e.preventDefault(); 
+    if (!newComment.trim()) {
+      alert("댓글 내용을 입력하세요.");
+      return;
+    }
+    try {
+      await axios.post(
+        `http://localhost:8080/api/board/${boardId}/comments`, 
+        { content: newComment }, 
+        getAuthHeaders() // (댓글 작성은 인증 필요)
+      );
+      setNewComment(""); 
+      await fetchComments(); // 댓글 목록 새로고침
+    } catch (error) {
+      // ... (에러 처리) ...
+    }
+  };
+
+  // (댓글 삭제 핸들러)
+  const handleCommentDelete = async (commentId) => {
+    if (window.confirm("이 댓글을 삭제하시겠습니까?")) {
+      try {
+        await axios.delete(
+          `http://localhost:8080/api/comments/${commentId}`,
+          getAuthHeaders() // (댓글 삭제는 인증 필요)
+        );
+        alert("댓글이 삭제되었습니다.");
+        await fetchComments(); // 댓글 목록 새로고침
+      } catch (error) {
+        // ... (에러 처리) ...
+      }
+    }
+  };
+
+  // (로딩 중 UI)
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
   }
-};
-// --- [삭제 로직 끝] ---
 
-  if (loading) {
-    return <div>로딩 중...</div>;
-  }
+  // (게시글 없음 UI)
+  if (!post) {
+    return <Alert severity="error">해당 게시글을 찾을 수 없습니다.</Alert>;
+  }
 
-  if (!post) {
-    return <div>해당 게시글을 찾을 수 없습니다.</div>;
-  }
-
-  // state에 저장된 post의 내용을 렌더링
-  return (
-    <div>
-      <h2>{post.title}</h2>
-      <p>게시글 ID: {post.id}</p>
-      <hr />
-      <p>{post.content}</p>
-      <br />
+  // (메인 UI)
+  return (
+    <React.Fragment> 
+      {/* 1. 게시글 본문 (Paper) */}
+      <Paper elevation={3} sx={{ p: { xs: 2, md: 4 }, mt: 2 }}>
+        {/* ... (게시글 제목, 부가 정보, 내용, 버튼 영역) ... */}
+        <Typography variant="h4" component="h1" gutterBottom>
+          {post.title}
+        </Typography>
+        <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+          게시글 ID: {post.id} | 작성자: {post.authorUsername || '알 수 없음'}
+        </Typography>
+        <Divider sx={{ my: 2 }} />
+        <Typography variant="body1" sx={{ minHeight: '150px', whiteSpace: 'pre-wrap' }}>
+          {post.content}
+        </Typography>
+        <Divider sx={{ my: 2 }} />
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+          <Button variant="outlined" component={RouterLink} to="/list">
+            목록
+          </Button>
+          {isAuthor && (
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button variant="contained" color="secondary" component={RouterLink} to={`/update/${boardId}`}>
+                수정
+              </Button>
+              <Button variant="contained" color="error" onClick={handleDeletePost}>
+                삭제
+              </Button>
+            </Box>
+          )}
+        </Box>
+      </Paper>
       
-      {/* 버튼(링크) 영역 */}
-      <Link to="/list">
-        <button>목록</button>
-      </Link>
-      
-      {/* --- [조건부 렌더링] --- */}
-      {/* isAuthor 상태가 true일 때만 이 버튼들이 화면에 보임 */}
-      {isAuthor && (
-        <> {/* 여러 버튼 묶음 */}      
-      {/* [수정 버튼] - /update/id 경로로 이동하는 링크 */}
-      <Link to={`/update/${boardId}`}>
-        <button>수정</button>
-      </Link>
+      {/* 2. 댓글 영역 (Paper) */}
+      <Paper elevation={0} sx={{ p: { xs: 2, md: 4 }, mt: 4 }}>
+        <Typography variant="h6" gutterBottom>
+          댓글 ({comments.length})
+        </Typography>
 
-      {/* [삭제 버튼] - 클릭 시 handleDelete 함수 실행 */}
-      <button onClick={handleDelete}>삭제</button>
-      </>
-      )}
-      {/* --- [조건부 렌더링 끝] --- */}
-    </div>
-  );
+        {/* 3. 댓글 작성 폼 (로그인 시에만) */}
+        {isLoggedIn && (
+          <Box 
+            component="form" 
+            onSubmit={handleCommentSubmit} 
+            sx={{ display: 'flex', gap: 1, mb: 3 }}
+          >
+            <TextField
+              label="댓글을 입력하세요"
+              variant="outlined"
+              fullWidth
+              size="small"
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+            />
+            <Button type="submit" variant="contained">작성</Button>
+          </Box>
+        )}
+
+        {/* 4. 댓글 목록 */}
+        <List>
+          {comments.length > 0 ? (
+            comments.map((comment) => (
+              <React.Fragment key={comment.id}>
+                <ListItem 
+                  alignItems="flex-start"
+                  secondaryAction={
+                    // (댓글 작성자 본인일 경우에만 삭제 버튼 표시)
+                    isLoggedIn && currentUsername === comment.authorUsername && (
+                      <IconButton edge="end" aria-label="delete" onClick={() => handleCommentDelete(comment.id)}>
+                        <DeleteIcon />
+                      </IconButton>
+                    )
+                  }
+                >
+                  <ListItemText
+                    // [수정됨] primary: 작성자 | 시간 (포맷팅 적용)
+                    primary={
+                      <React.Fragment>
+                        <Typography
+                          component="span"
+                          variant="body2"
+                          color="text.primary"
+                          sx={{ fontWeight: 'bold', mr: 1 }}
+                        >
+                          {comment.authorUsername}
+                        </Typography>
+                        <Typography component="span" variant="caption" color="text.secondary">
+                          {formatTimestamp(comment.createdAt)}
+                        </Typography>
+                      </React.Fragment>
+                    }
+                    // [수정됨] secondary: 댓글 내용
+                    secondary={
+                      <Typography
+                        component="span"
+                        variant="body1"
+                        color="text.primary"
+                        sx={{ mt: 1, display: 'block' }}
+                      >
+                        {comment.content}
+                      </Typography>
+                    }
+                  />
+                </ListItem>
+                <Divider variant="inset" component="li" />
+              </React.Fragment>
+            ))
+          ) : (
+            <Typography color="text.secondary">
+              작성된 댓글이 없습니다.
+            </Typography>
+          )}
+        </List>
+      </Paper>
+    </React.Fragment> 
+  );
 }
 
 export default BoardDetail;
+

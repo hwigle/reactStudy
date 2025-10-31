@@ -1,103 +1,119 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom'; // 1. Link를 RouterLink로 별명 부여
 import axios from 'axios';
 
+// --- 👇 [MUI 컴포넌트 import] ---
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Typography from '@mui/material/Typography';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemText from '@mui/material/ListItemText';
+import Divider from '@mui/material/Divider';
+import Pagination from '@mui/material/Pagination';
+import CircularProgress from '@mui/material/CircularProgress'; // 로딩 아이콘
+// --- [MUI import 끝] ---
+
 function BoardList() {
-  const [list, setList] = useState([]); // 게시글 '목록' 데이터 (배열)
-  const [loading, setLoading] = useState(true);
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const isLoggedIn = !!localStorage.getItem('jwtToken');
+  const [currentPage, setCurrentPage] = useState(0); 
+  const [totalPages, setTotalPages] = useState(0);
 
-  // --- [로그인 상태 확인 로직 추가] ---
-  // localStorage에서 'jwtToken'을 읽어옴 
-  // 토큰이 있으면 loggedIn은 true, 없으면 false가 됩니다.
-  const isLoggedIn = !!localStorage.getItem('jwtToken'); 
-  // --- [확인 로직 끝] ---
-
-  // --- [페이지네이션 State 추가] ---
-  const [currentPage, setCurrentPage] = useState(0); // 현재 페이지 번호 (0부터 시작)
-  const [totalPages, setTotalPages] = useState(0); // 전체 페이지 수
-  // --- [페이지네이션 State 추가 끝] ---
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true); // (선택) 데이터 요청 시작 시 로딩 상태로 설정
-      try {
-        const response = await axios.get(`http://localhost:8080/api/board?page=${currentPage}`);
-
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const response = await axios.get(`http://localhost:8080/api/board?page=${currentPage}`);
         const pageData = response.data;
-        setList(pageData.content); // 실제 게시글 목록 (배열)
-        setTotalPages(pageData.totalPages); // 전체 페이지 수
-      } catch (e) {
-        console.error("목록 데이터 로딩 실패: ", e);
-        setList([]); // 에러 시 목록 비우기
-        setTotalPages(0); // 에러 시 페이지 수 0으로
-      }
-      setLoading(false); 
-    };
+        setList(pageData.content); 
+        setTotalPages(pageData.totalPages); 
+      } catch (e) {
+        console.error("목록 데이터 로딩 실패: ", e);
+        setList([]); 
+        setTotalPages(0); 
+      }
+      setLoading(false); 
+    };
 
     fetchData(); 
-    // 의존성 배열에 'currentPage' 추가 -> currentPage state가 바뀔 때마다 useEffect가 다시 실행됨
-  }, [currentPage]);
+  }, [currentPage]);
 
-  // --- [페이지 이동 함수 추가] ---
-  const handlePrevPage = () => {
-    // 현재 페이지가 0보다 클 때만 이전 페이지로 이동
-    setCurrentPage(prev => Math.max(prev - 1, 0));
+  // --- 👇 [페이지네이션 핸들러 변경] ---
+  // MUI Pagination 컴포넌트는 1부터 시작하는 페이지 번호를 반환
+  const handlePageChange = (event, page) => {
+    setCurrentPage(page - 1); // 1부터 시작하는 페이지를 0부터 시작하는 state로 변환
   };
+  // (기존 handlePrevPage, handleNextPage 함수는 삭제)
+  // --- [핸들러 변경 끝] ---
 
-  const handleNextPage = () => {
-    // 현재 페이지가 마지막 페이지보다 작을 때만 다음 페이지로 이동
-    setCurrentPage(prev => Math.min(prev + 1, totalPages - 1));
-  };
-  // --- [페이지 이동 함수 추가 끝] ---
+  // --- 👇 [로딩 중 UI 변경] ---
+  if (loading) {
+    // 로딩 중일 때 화면 중앙에 원형 로딩 아이콘 표시
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+  // --- [로딩 UI 끝] ---
 
-  if (loading) {
-    return <div>로딩 중...</div>;
-  }
+  return (
+    // 1. <div> 대신 <Box> 사용 (MUI의 레이아웃용 컴포넌트)
+    <Box>
+      {/* 2. <h2> 대신 <Typography> (MUI의 텍스트 컴포넌트) */}
+      <Typography variant="h4" component="h2" sx={{ mb: 2 }}> {/* mb: 2 = margin-bottom 2단위 */}
+        📋 게시판 목록
+      </Typography>
 
-  return (
-    <div>
-      {/* --- [조건부 렌더링으로 버튼 감싸기] --- */}
-      {/* isLoggedIn이 true일 때만 <Link> 버튼을 렌더링 */}
       {isLoggedIn && (
-        <> {/* 여러 요소를 감싸기 위한 Fragment */}
-          <Link to="/write">
-            <button>새 글 작성하기</button>
-          </Link>
-          <hr />
-        </>
+        // 3. <button> 대신 MUI <Button>
+        <Button 
+          component={RouterLink} // React Router의 Link 기능과 연결
+          to="/write" 
+          variant="contained" // 배경색이 채워진 버튼
+          color="primary"   // 파란색
+          sx={{ mb: 2 }}      // 아래쪽 여백
+        >
+          새 글 작성하기
+        </Button>
       )}
-      {/* --------------------- */}
-      {/* 게시글 목록 */}
-      <ul>
-        {list.map(item => ( 
-          <li key={item.id}>
-            <Link to={`/detail/${item.id}`}>{item.title}</Link>
-          </li>
-        ))}
-      </ul>
-        {/* --- [페이지네이션 UI 추가] --- */}
-        <div style={{ textAlign: 'center', marginTop: '20px' }}>
-          {/* 이전 버튼: 첫 페이지면 비활성화(disabled) */}
-          <button onClick={handlePrevPage} disabled={currentPage === 0}>
-            이전
-          </button>
 
-          {/* 현재 페이지 / 전체 페이지 표시 (페이지 번호는 0부터 시작하므로 +1) */}
-          <span style={{ margin: '0 10px' }}>
-            {currentPage + 1} / {totalPages}
-          </span>
+      {/* 4. <ul> 대신 MUI <List> */}
+      <List>
+        {list.map(item => (
+          // 5. <li> 대신 <ListItem>
+          <ListItem key={item.id} disablePadding>
+            {/* 6. <Link> 대신 <ListItemButton> (클릭 효과 + Link 기능) */}
+            <ListItemButton component={RouterLink} to={`/detail/${item.id}`}>
+              {/* 7. 제목과 작성자를 예쁘게 표시해주는 <ListItemText> */}
+              <ListItemText 
+                primary={item.title} // 큰 글씨 (제목)
+                secondary={`작성자: ${item.authorUsername || '익명'}`} // 작은 글씨 (작성자)
+              />
+            </ListItemButton>
+          </ListItem>
+        ))}
+      </List>
 
-          {/* 다음 버튼: 마지막 페이지면 비활성화 */}
-          <button onClick={handleNextPage} disabled={currentPage >= totalPages - 1}>
-            다음
-          </button>
-        </div>
-        {/* --- [UI 추가 끝] --- */}
-        
-      <hr style={{ marginTop: '20px' }}/>
-      <Link to="/">메인으로 돌아가기</Link>
-    </div>
-  );
+      <Divider sx={{ my: 2 }} /> {/* <hr /> 대신 MUI 구분선 */}
+
+      {/* 8. [페이지네이션 UI 변경] - MUI <Pagination> 컴포넌트 사용 */}
+      <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+        <Pagination 
+          count={totalPages} // 전체 페이지 수
+          page={currentPage + 1} // 현재 페이지 (MUI는 1부터 시작)
+          onChange={handlePageChange} // 페이지 변경 시 호출될 함수
+          color="primary"
+        />
+      </Box>
+      {/* --- [UI 변경 끝] --- */}
+      
+      {/* (메인으로 돌아가기 버튼은 App.js의 AppBar에 있으니 여기선 생략 가능) */}
+    </Box>
+  );
 }
 
 export default BoardList;
